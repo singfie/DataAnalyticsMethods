@@ -1,0 +1,295 @@
+\documentclass{article}
+
+\usepackage{amsmath}
+\usepackage{comment}
+\usepackage{color}
+\usepackage{graphicx}
+\usepackage{enumitem}
+\graphicspath{ {figure/} }
+
+\newcommand{\mb}{\mathbf}
+
+\usepackage[paper=letterpaper,margin=1in]{geometry}
+\newgeometry{top=1in,bottom=1in,right=0.8in,left=0.8in}
+
+\title{\vspace{-2.0cm}Support Vector Machines}
+\author{Klaas Fiete Krutein}
+
+%%%% Toggle '\includecomment' line for inclusion/exclusion of comments (R code)
+\includecomment{comment}
+
+%%% comments for R code chunks: 'include=', 'label=', 'echo=', 'fig.keep=', 'results=' 
+
+\begin{document}
+
+%\SweaveOpts{concordance=TRUE}
+% \SweaveOpts{concordance=TRUE}
+
+\maketitle
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\subsection*{\large{Problem 1:}}
+Here let’s consider the following dataset.
+\begin{center}
+  \begin{tabular}{|c|c|c|c|c|}
+  \hline
+    ID & $X_1$ & $X_2$ & $X_3$ & $Y$ \\ \hline
+    1 & 4 & 1 & 1 & 1 \\ \hline
+    2 & 4 & -1 & 0 & 1 \\ \hline
+    3 & 8 & 2 & 1 & 1 \\ \hline
+    4 & -2.5 & 0 & 0 & -1 \\ \hline
+    5 & 0 & 1 & 1 & -1 \\ \hline
+    6 & -0.3 & -1 & 0 & -1 \\ \hline
+    7 & 2.5 & -1 & 1 & -1 \\ \hline
+    8 & -1 & 1 & 0 & -1 \\ \hline
+    \hline
+  \end{tabular}
+\end{center}
+\begin{enumerate}
+\item Identify the support vectors if you'd like to build a linear SVM classifier
+\subsubsection*{Solution:}
+Given the low size of the dataset we decide to plot the values and eyeball the support vectors.
+<<>>=
+library(ggplot2)
+data <- as.data.frame(matrix(c(4,1,1,1,4,-1,0,1,8,2,1,
+                               1,-2.5, 0,0,-1,0,1,1,-1,
+                               -0.3,-1,0,-1,2.5,-1,1,-1,
+                               -1,1,0,-1), nrow=8, ncol=4, byrow=TRUE))
+colnames(data) <- c("x1", "x2", "x3", "y")
+# Introduce test data 
+data.test <- as.data.frame(matrix(c(5.4, 1.2, 2, 1.5,-2,3,-3.4,1,-2,-2.2,-1,-4),
+                                  nrow=4, ncol=3, byrow=TRUE))
+colnames(data.test) <- c("x1", "x2", "x3")
+
+require(gridExtra)
+plot1 <- ggplot(data=data, aes(x=x1, y=x2, color=factor(y))) + geom_point()
+plot2 <- ggplot(data=data, aes(x=x2, y=x3, color=factor(y))) + geom_point()
+plot3 <- ggplot(data=data, aes(x=x1, y=x3, color=factor(y))) + geom_point()
+grid.arrange(plot1, plot2, plot3, ncol=2, nrow=2)
+@
+We can easily identify the support vectors to be the vectors with $ID=1,2,7$ as our support vectors.
+Another way would be to use the indexes used in the linear SVM function. We can solve this through solving the quadratic program formulation of SVM in R:
+<<>>=
+require( 'kernlab' )
+linear.svm <- ksvm(y ~ ., data=data, type='C-svc', kernel='vanilladot', 
+                   C=10, scale=c(),scaled = FALSE)
+# display indexes
+alphaindex(linear.svm)
+@
+Which gives us the same support vectors.
+\item Derive the alpha values (i.e., the $\alpha_i$) for the support vectors and the offset parameter $b$ 
+\subsubsection*{Solution:}
+We know that we can represent the learned model parameters as:
+$$ \hat{\mb{w}} = \sum_{n=1}^N \alpha_n y_n \mb{x}_n$$
+$$ \hat{b} = 1-\hat{\mb{w}}^T\mb{x}_n \quad \text{for any} \ \mb{x}_n \ \text{whose} \ \alpha_n > 0$$
+Based on the KKT conditions we can calculate for any $n$th data point that it is either:
+$$ \alpha_n = 0 \ \text{or} \ y_n(\mb{w}^T\mb{x}_n + b) - 1 = 0$$
+Based on the model formulation we can create:
+\begin{align*}
+\alpha_1y_1\phi(x_1)^T\phi(x_1) + \alpha_2 y_2\phi(x_2)^T \phi(x_1) + \alpha_7\phi(x_7)^T \phi(x_1) + b & = 1\\
+\alpha_1y_1\phi(x_1)^T\phi(x_2) + \alpha_2 y_2\phi(x_2)^T \phi(x_2) + \alpha_7\phi(x_7)^T \phi(x_2) + b & = 1\\
+\alpha_1y_1\phi(x_1)^T\phi(x_7) + \alpha_2 y_2\phi(x_2)^T \phi(x_7) + \alpha_7\phi(x_7)^T \phi(x_7) + b & = -1\\
+\alpha_1 + \alpha_2 - \alpha_7 & = 0\\
+\end{align*}
+And thus:
+\begin{align*}
+18\alpha_1 + 15\alpha_2 - 10\alpha_7 + b & = 1\\
+15 \alpha_1 + 17 \alpha_2 - 11 \alpha_7 + b & = 1\\
+10\alpha_1 + 11 \alpha_2 -8.25 \alpha_7 + b & = -1\\
+\alpha_1 + \alpha_2 - \alpha_7 & = 0\\
+\alpha_1 & = \frac{8}{61} = 0.13\\
+\alpha_2 & = \frac{32}{61} = 0.52\\
+\alpha_7 & = \frac{40}{61} = 0.656\\
+b & = -\frac{163}{61} = -2.67
+\end{align*}
+Thus, we get our $\alpha$-values as $\alpha_1 = 0.13$, $\alpha_2 = 0.52$ and $\alpha_7 = 0.656$.
+\item Deriver the weight vector (i.e., the $\hat{w}$) of the SVM model
+\subsubsection*{Solution:}
+Based on the $\alpha$-values calculated above we can now build the weight vector as:
+\begin{align*}
+\hat{\mb{w}} & = \sum_{n=1}^N \alpha_ny_nx_n\\
+& = \frac{8}{61}\begin{bmatrix}4 \\ 1 \\ 1 \\ \end{bmatrix} + \frac{32}{61}\begin{bmatrix}4 \\ -1 \\ 0 \\ \end{bmatrix} - \frac{40}{61}\begin{bmatrix}2.5 \\ -1 \\ 1 \\ \end{bmatrix}\\
+& = \begin{bmatrix}\frac{60}{61} \\ \frac{16}{61} \\ -\frac{32}{61} \\ \end{bmatrix}\\
+\end{align*}
+\item Predict on the new dataset and fill in the table below on column of $Y$
+\begin{center}
+  \begin{tabular}{|c|c|c|c|c|}
+  \hline
+    ID & $X_1$ & $X_2$ & $X_3$ & $Y$ \\ \hline
+    9 & 5.4 & 1.2 & 2 & \\ \hline
+    10 & 1.5 & -2 & 3 & \\ \hline
+    11 & -3.4 & 1 & -2 & \\ \hline
+    12 & -2.2 & -1 & -4 & \\ \hline
+    \hline
+  \end{tabular}
+\end{center}
+\end{enumerate}
+\subsubsection*{Solution:}
+We can now build the decision function as:
+$$ \hat{\mb{w}}^T\phi(x_i) + b = \frac{60}{61}\mb{x}_{i1} + \frac{16}{61}\mb{x}_{i2} - \frac{32}{61}\mb{x}_{i3} - \frac{163}{61}$$
+We make a decision based on:
+$$ \begin{cases}
+\text{if} \ \hat{\mb{w}}\phi(\mb{x}_i) + b > 0 \rightarrow y=1\\
+\text{otherwise} \rightarrow y = -1\\
+\end{cases}$$
+<<>>=
+data.test$y <- NA
+# Implement in for loop
+for (i in 1:length(data.test$x1))
+if(60/61 * data.test$x1[i] + 16/61 * data.test$x2[i] - 32/61 * data.test$x3[i] - 163/61 > 0){
+  data.test$y[i] <- 1
+}else{
+  data.test$y[i] <- -1
+}
+data.test
+@
+Filled in the previous table this is:
+\begin{center}
+  \begin{tabular}{|c|c|c|c|c|}
+  \hline
+    ID & $X_1$ & $X_2$ & $X_3$ & $Y$ \\ \hline
+    9 & 5.4 & 1.2 & 2 & 1\\ \hline
+    10 & 1.5 & -2 & 3 & -1\\ \hline
+    11 & -3.4 & 1 & -2 & -1\\ \hline
+    12 & -2.2 & -1 & -4 & -1\\ \hline
+    \hline
+  \end{tabular}
+\end{center}
+\subsection*{\large{Problem 2:}}
+Use the essential R pipeline for SVM on this data. Compare the alpha values, the offset parameter $b$, and the weight vector from R and the result by your manual calculation in Q1.
+\subsubsection*{Solution:}
+We decide to test 6 different model configurations
+<<>>=
+# build different models to test the case
+model1 <- as.formula(y ~ .)
+model2 <- as.formula(y ~ x1)
+model3 <- as.formula(y ~ x2)
+model4 <- as.formula(y ~ x1 + x2)
+model5 <- as.formula(y ~ x1 + x3)
+model6 <- as.formula(y ~ x2 + x3)
+@
+We also decide to use a 4-fold cross validation.
+<<>>=
+# Use 4-fold cross validation to justify models
+n_folds = 4 # number of fold 
+N <- dim(data)[1] # the sample size N
+folds_i <- sample(rep(1:n_folds, length.out = N))
+
+MSEs <- data.frame(MSE = NA)# record MSEs
+
+# Model1
+cv_err <- NULL # cv_mse recors for each fold
+for (k in 1:n_folds) {
+  test_i <- which(folds_i == k) # Index testing data
+  data.train.cv <- data[-test_i, ]
+  data.test.cv <- data[test_i, ]
+  require( 'kernlab' )
+  # Fit the linear SVM model with the training data
+  linear.svm <- ksvm(model1, data=data.train.cv, type='C-svc', kernel='vanilladot', C=10) 
+  y_hat <- predict(linear.svm, data.test.cv)  # predict
+  true_y <- data.test.cv$y # true values
+  cv_err[k] <-length(which(y_hat != true_y))/length(y_hat) # prediction error
+}
+MSEs[1,] <- mean(cv_err)
+
+# Model 2
+cv_err <- NULL # cv_mse recors for each fold
+for (k in 1:n_folds) {
+  test_i <- which(folds_i == k) # Index testing data
+  data.train.cv <- data[-test_i, ]
+  data.test.cv <- data[test_i, ]
+  require( 'kernlab' )
+  # Fit the linear SVM model with the training data
+  linear.svm <- ksvm(model2, data=data.train.cv, type='C-svc', kernel='vanilladot', C=10) 
+  y_hat <- predict(linear.svm, data.test.cv)  # predict
+  true_y <- data.test.cv$y # true values
+  cv_err[k] <-length(which(y_hat != true_y))/length(y_hat) # prediction error
+}
+MSEs[2,] <- mean(cv_err)
+
+# Model 3
+cv_err <- NULL # cv_mse recors for each fold
+for (k in 1:n_folds) {
+  test_i <- which(folds_i == k) # Index testing data
+  data.train.cv <- data[-test_i, ]
+  data.test.cv <- data[test_i, ]
+  require( 'kernlab' )
+  # Fit the linear SVM model with the training data
+  linear.svm <- ksvm(model3, data=data.train.cv, type='C-svc', kernel='vanilladot', C=10) 
+  y_hat <- predict(linear.svm, data.test.cv)  # predict
+  true_y <- data.test.cv$y # true values
+  cv_err[k] <-length(which(y_hat != true_y))/length(y_hat) # prediction error
+}
+MSEs[3,] <- mean(cv_err)
+
+# Model 4
+cv_err <- NULL # cv_mse recors for each fold
+for (k in 1:n_folds) {
+  test_i <- which(folds_i == k) # Index testing data
+  data.train.cv <- data[-test_i, ]
+  data.test.cv <- data[test_i, ]
+  require( 'kernlab' )
+  # Fit the linear SVM model with the training data
+  linear.svm <- ksvm(model4, data=data.train.cv, type='C-svc', kernel='vanilladot', C=10) 
+  y_hat <- predict(linear.svm, data.test.cv)  # predict
+  true_y <- data.test.cv$y # true values
+  cv_err[k] <-length(which(y_hat != true_y))/length(y_hat) # prediction error
+}
+MSEs[4,] <- mean(cv_err)
+
+# Model 5
+cv_err <- NULL # cv_mse recors for each fold
+for (k in 1:n_folds) {
+  test_i <- which(folds_i == k) # Index testing data
+  data.train.cv <- data[-test_i, ]
+  data.test.cv <- data[test_i, ]
+  require( 'kernlab' )
+  # Fit the linear SVM model with the training data
+  linear.svm <- ksvm(model5, data=data.train.cv, type='C-svc', kernel='vanilladot', C=10) 
+  y_hat <- predict(linear.svm, data.test.cv)  # predict
+  true_y <- data.test.cv$y # true values
+  cv_err[k] <-length(which(y_hat != true_y))/length(y_hat) # prediction error
+}
+MSEs[5,] <- mean(cv_err)
+
+# Model 6
+cv_err <- NULL # cv_mse recors for each fold
+for (k in 1:n_folds) {
+  test_i <- which(folds_i == k) # Index testing data
+  data.train.cv <- data[-test_i, ]
+  data.test.cv <- data[test_i, ]
+  require( 'kernlab' )
+  # Fit the linear SVM model with the training data
+  linear.svm <- ksvm(model6, data=data.train.cv, type='C-svc', kernel='vanilladot', C=10) 
+  y_hat <- predict(linear.svm, data.test.cv)  # predict
+  true_y <- data.test.cv$y # true values
+  cv_err[k] <-length(which(y_hat != true_y))/length(y_hat) # prediction error
+}
+MSEs[6,] <- mean(cv_err)
+# Calculate and display optimal model
+opt <- which(MSEs== min(MSEs), arr.ind = TRUE)
+print(opt)
+@
+
+<<>>=
+# fit optimal model
+linear.svm <- ksvm(model2, data=data, type='C-svc', kernel='vanilladot', C=10) 
+# predict the values 
+y_hat <- predict(linear.svm, data.test)
+y_hat
+@
+We cannot test the prediction performance as we do not have $Y$ values for our data set. But we can fill in the table as follows:
+\begin{center}
+  \begin{tabular}{|c|c|c|c|c|}
+  \hline
+    ID & $X_1$ & $X_2$ & $X_3$ & $Y$ \\ \hline
+    9 & 5.4 & 1.2 & 2 & 1\\ \hline
+    10 & 1.5 & -2 & 3 & -1\\ \hline
+    11 & -3.4 & 1 & -2 & -1\\ \hline
+    12 & -2.2 & -1 & -4 & -1\\ \hline
+    \hline
+  \end{tabular}
+\end{center}
+
+\end{document}
