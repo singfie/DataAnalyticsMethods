@@ -1,0 +1,539 @@
+---
+title: "WDI data project"
+author: "Klaas Fiete Krutein"
+date: "11/28/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# setwd("/Project")
+set.seed(123)
+data <- read.csv("HDIdata_new.csv")
+```
+
+At first, we look at our dataset through investigating its structure and summary
+```{r}
+str(data)
+```
+As we can see we have a lot of missing values for many of the years. If we want to use a large part of the data set to check for correlations, we need to clean our data set. Thus, we create a function that kills all the variables that do not show data for more than 50% of the time. 
+```{r}
+library(dplyr)
+col_test <- apply(data[,3:length(data)], 2, function(x) sum(is.na(x)))
+col_test <- col_test/nrow(data)
+# We select only columns where the number of NA values is not too small < 30%
+data_test <- cbind(data[,1:2], data %>% select(names(col_test[col_test < 0.3])))
+# Now we kick out the variables that are closely related to our variable of interest as we want to avoid colinearity effects
+drops <- c("NY.GDP.MKTP.KD", "NY.GDP.MKTP.CD", "NY.GDP.MKTP.KD.ZG", "NY.GDP.PCAP.KD", "NY.GDP.PCAP.CD")
+data_test <- data_test[, !(names(data_test) %in% drops)]
+head(data_test[5:10,])
+```
+Now, we can check how the function works and look at the resulting data frame:
+Basic tests on regression modelling:
+```{r}
+# Create a training data (80% the original data size)
+# train.ix <- sample(nrow(data_test),floor(nrow(data)*0.8))
+# write.csv(train.ix, file="train_ix.csv", row.names=FALSE)
+train.ix <- read.csv("train_ix.csv")[,1]
+data.train <- data_test[train.ix,4:length(data_test)]
+
+# Create a testing data (20% the original data size)
+data.test <- data_test[-train.ix,4:length(data_test)]
+```
+What we need to do here:
+1. Define models we want to investigate:
+  1. Lasso Regression for variable selection BEFORE fitting the model, followed by applying selected variables to linear regression model 
+  2. Random forest
+  3. Additional method (to be defined)
+2. Use these models to predict and cross-validate their structure. 
+
+Build a random forest on this data setShow in New WindowClear OutputExpand/Collapse Output
+'data.frame':	15576 obs. of  1603 variables:
+ $ Year                     : Factor w/ 59 levels "X","X1960","X1961",..: 2 3 4 5 6 7 8 9 10 11 ...
+ $ Country.Name             : Factor w/ 264 levels "Afghanistan",..: 8 8 8 8 8 8 8 8 8 8 ...
+ $ Country.Code             : Factor w/ 264 levels "ABW","AFG","AGO",..: 6 6 6 6 6 6 6 6 6 6 ...
+ $ PA.NUS.PPP.05            : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ PA.NUS.PRVT.PP.05        : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ EG.CFT.ACCS.ZS           : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ EG.ELC.ACCS.ZS           : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ EG.ELC.ACCS.RU.ZS        : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ EG.ELC.ACCS.UR.ZS        : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ FX.OWN.TOTL.ZS           : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ FX.OWN.TOTL.FE.ZS        : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ FX.OWN.TOTL.MA.ZS        : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ FX.OWN.TOTL.OL.ZS        : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ FX.OWN.TOTL.40.ZS        : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ FX.OWN.TOTL.PL.ZS        : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ FX.OWN.TOTL.60.ZS        : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ FX.OWN.TOTL.SO.ZS        : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ FX.OWN.TOTL.YG.ZS        : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ per_si_allsi.adq_pop_tot : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ per_allsp.adq_pop_tot    : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ per_sa_allsa.adq_pop_tot : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ per_lm_alllm.adq_pop_tot : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ SE.PRM.TENR              : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ SE.PRM.TENR.FE           : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ SE.PRM.TENR.MA           : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ NY.ADJ.NNTY.KD.ZG        : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ NY.ADJ.NNTY.KD           : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ NY.ADJ.NNTY.CD           : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ NY.ADJ.NNTY.PC.KD.ZG     : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ NY.ADJ.NNTY.PC.KD        : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ NY.ADJ.NNTY.PC.CD        : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ NY.ADJ.SVNX.GN.ZS        : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ NY.ADJ.SVNX.CD           : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ NY.ADJ.SVNG.GN.ZS        : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ NY.ADJ.SVNG.CD           : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ NY.ADJ.DCO2.GN.ZS        : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ NY.ADJ.DCO2.CD           : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ NY.ADJ.DKAP.GN.ZS        : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ NY.ADJ.DKAP.CD           : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ NY.ADJ.AEDU.GN.ZS        : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ NY.ADJ.AEDU.CD           : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ NY.ADJ.DNGY.GN.ZS        : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ NY.ADJ.DNGY.CD           : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ NY.ADJ.ICTR.GN.ZS        : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ NY.ADJ.DMIN.GN.ZS        : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ NY.ADJ.DMIN.CD           : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ NY.ADJ.DRES.GN.ZS        : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ NY.ADJ.DFOR.GN.ZS        : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ NY.ADJ.DFOR.CD           : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ NY.ADJ.NNAT.GN.ZS        : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ NY.ADJ.NNAT.CD           : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ NY.ADJ.DPEM.GN.ZS        : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ NY.ADJ.DPEM.CD           : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ SP.ADO.TFRT              : num  134 135 136 135 135 ...
+ $ SE.SEC.UNER.LO.ZS        : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ SE.SEC.UNER.LO.FE.ZS     : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ SE.SEC.UNER.LO.MA.ZS     : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ SH.HIV.INCD.TL           : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ SH.HIV.INCD              : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ SP.POP.DPND              : num  88.2 89.6 90.9 92.1 92.9 ...
+ $ SP.POP.DPND.OL           : num  6.6 6.71 6.81 6.88 6.94 ...
+ $ SP.POP.DPND.YG           : num  81.5 82.8 83.9 84.9 85.6 ...
+ $ AG.LND.IRIG.AG.ZS        : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ AG.LND.AGRI.ZS           : num  NA 30.9 30.9 31 31 ...
+ $ AG.LND.AGRI.K2           : num  NA 4215860 4215840 4218970 4220260 ...
+ $ AG.AGR.TRAC.NO           : num  NA 73480 76900 81263 86067 ...
+ $ AG.LND.TRAC.ZS           : num  NA 16 16.7 17.6 18.5 ...
+ $ EN.ATM.METH.AG.ZS        : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ EN.ATM.METH.AG.KT.CE     : num  NA NA NA NA NA NA NA NA NA 0 ...
+ $ EN.ATM.NOXE.AG.ZS        : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ EN.ATM.NOXE.AG.KT.CE     : num  NA NA NA NA NA NA NA NA NA 0 ...
+ $ TX.VAL.AGRI.ZS.UN        : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ TM.VAL.AGRI.ZS.UN        : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ NV.AGR.TOTL.ZS           : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ NV.AGR.TOTL.KD.ZG        : num  NA NA NA NA NA ...
+ $ NV.AGR.TOTL.KD           : num  NA NA NA NA NA ...
+ $ NV.AGR.TOTL.KN           : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ NV.AGR.TOTL.CN           : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ NV.AGR.TOTL.CD           : num  NA NA NA NA NA ...
+ $ NV.AGR.EMPL.KD           : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ IS.AIR.GOOD.MT.K1        : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ IS.AIR.PSGR              : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ IS.AIR.DPRT              : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ SE.XPD.MPRM.ZS           : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ SE.XPD.MSEC.ZS           : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ SE.XPD.MTER.ZS           : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ SE.XPD.MTOT.ZS           : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ EG.USE.COMM.CL.ZS        : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ ER.H2O.FWAG.ZS           : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ ER.H2O.FWDM.ZS           : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ ER.H2O.FWIN.ZS           : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ ER.H2O.FWTL.ZS           : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ ER.H2O.FWTL.K3           : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ SI.SPR.PC40.ZG           : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ SI.SPR.PCAP.ZG           : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ SH.HIV.ARTC.ZS           : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ SH.HIV.PMTC.ZS           : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ ER.FSH.AQUA.MT           : num  4600 5200 5200 6000 7000 ...
+ $ AG.LND.ARBL.ZS           : num  NA 3.38 3.38 3.4 3.43 ...
+  [list output truncated]
+Show in New WindowClear OutputExpand/Collapse Output
+
+Attaching package: ‘dplyr’
+
+The following object is masked from ‘package:MASS’:
+
+    select
+
+The following objects are masked from ‘package:stats’:
+
+    filter, lag
+
+The following objects are masked from ‘package:base’:
+
+    intersect, setdiff, setequal, union
+
+R Console
+ 
+ 
+Year
+<fctr>
+Country.Name
+<fctr>
+Country.Code
+<fctr>
+NY.ADJ.AEDU.GN.ZS
+<dbl>
+5	X1964	Arab World	ARB	NA	
+6	X1965	Arab World	ARB	NA	
+7	X1966	Arab World	ARB	NA	
+8	X1967	Arab World	ARB	NA	
+9	X1968	Arab World	ARB	NA	
+10	X1969	Arab World	ARB	NA	
+6 rows | 1-5 of 133 columns
+data.frame
+6 x 133
+ 
+ 
+Year
+<fctr>
+Country.Name
+<fctr>
+Country.Code
+<fctr>
+NY.ADJ.AEDU.GN.ZS
+<dbl>
+SP.ADO.TFRT
+<dbl>
+SP.POP.DPND
+<dbl>
+5	X1964	Arab World	ARB	NA	135.2749	92.89288	
+6	X1965	Arab World	ARB	NA	134.9472	93.36446	
+7	X1966	Arab World	ARB	NA	134.2336	94.24178	
+8	X1967	Arab World	ARB	NA	133.3622	94.63345	
+9	X1968	Arab World	ARB	NA	130.8725	94.68551	
+10	X1969	Arab World	ARB	NA	128.4122	94.56361	
+6 rows | 1-7 of 133 columns
+Show in New WindowClear OutputExpand/Collapse Output
+randomForest 4.6-14
+Type rfNews() to see new features/changes/bug fixes.
+
+Attaching package: ‘randomForest’
+
+The following object is masked from ‘package:dplyr’:
+
+    combine
+
+The following object is masked from ‘package:ggplot2’:
+
+    margin
+
+The following object is masked from ‘package:gridExtra’:
+
+    combine
+
+
+Call:
+ randomForest(formula = NY.GDP.PCAP.KD.ZG ~ ., data = data.train,      ntree = 200, nodesize = 20, mtry = 5, na.action = na.exclude) 
+               Type of random forest: regression
+                     Number of trees: 200
+No. of variables tried at each split: 5
+
+          Mean of squared residuals: 26.34565
+                    % Var explained: 9.68
+argument is not numeric or logical: returning NA[1] NA
+Show in New WindowClear OutputExpand/Collapse Output
+ Show Traceback
+Error: `data` must be a data frame, or other object coercible by `fortify()`, not a numeric vector
+Show in New WindowClear OutputExpand/Collapse Output
+
+
+plotly
+htmlwidget
+[1] 0.4337159
+R Console
+[1] 0.4337159
+```{r}
+# Build a random forest on a numeric dependent variable
+library(dplyr)
+data.train <- data.train %>% filter(!is.na(data.train$NY.GDP.PCAP.KD.ZG))
+
+library(randomForest)
+rf.AD <- randomForest(NY.GDP.PCAP.KD.ZG ~ ., data = data.train, ntree = 200, nodesize = 20, mtry = 5, na.action=na.exclude) 
+
+# Display the random forest
+rf.AD
+
+# Check the error
+mean(rf.AD$err.rate[,"OOB"])
+```
+
+```{r}
+# Select best models using cross validation
+n_folds = 10 # 10 folds cross validation
+N <- dim(data.train)[1] # the sample size, N, of the dataset
+folds_i <- sample(rep(1:n_folds, length.out = N)) 
+# Sequence for depth of trees
+min_size <- c(20, 25, 30, 35, 40, 45, 50, 55)
+# Select feature range between log(no. of features) and sqrt(no. of features)
+no.features <- c(5, 6, 7, 8, 9, 10, 11, 12)
+# Select tree number range
+no.trees <- c(50, 100, 150, 200, 250, 300)
+# Build a matrix to hold MSE values per tree tuning
+tree_mse <- array(dim=c(length(no.features), length(min_size), length(no.trees)))
+# Hold raw values inside a frame
+tree_errors <- matrix(NA, n_folds, 1)
+# Hold column names and rownames in final data frame
+colnames(tree_mse) <- as.character(min_size)
+rownames(tree_mse) <- as.character(no.features)
+# Run through all potential combinations of tuning and save the MSE
+for (t in 1:length(no.trees)){
+  for (f in 1:length(no.features)){
+    for (i in 1:length(min_size)){
+      tree_errors <- matrix(NA, n_folds, 1)
+      for (k in 1:n_folds){
+        test_i <- which(folds_i == k) # In each iteration of the 10 iterations, remember, we use one fold of data as the testing data
+        data.train.cv <- data.train[-test_i, ] # Then, the remaining 9 folds' data form our training data
+        data.test.cv <- data.train[test_i, ] # This is the testing data, from the ith fold
+        rf.AD <- randomForest(NY.GDP.PCAP.KD.ZG ~ ., data = data.train.cv, ntree = no.trees[t], na.action=na.exclude, 
+                              minbucket=min_size[i], mtry=no.features[f]) # Fit the linear model 
+        y_hat <- predict(rf.AD, data.test.cv,type="class") # Predict on the testing data using the trained model
+        true_y <- data.test.cv$NY.GDP.PCAP.KD.ZG # Get the true y values for the testing data
+        tree_errors[k,] <- mean((y_hat-true_y)^2, na.rm=TRUE)
+      }
+      tree_mse[f,i,t] <- mean(tree_errors)
+    }
+  }
+}
+# Write the output to a csv file to avoid losing the information
+write.csv(tree_mse, file="MSE_matrix.csv")
+# We can now check for the min value that will give us the lowest MSE
+opt <- which(tree_mse == min(tree_mse), arr.ind = TRUE)
+print(opt)
+write.csv(opt, file="optimal_tree.csv")
+```
+
+```{r}
+# Now, we can use it to predict the data set using the best tree based on MSE
+#rf.AD <- randomForest(NY.GDP.PCAP.KD.ZG ~ ., data = data.train, ntree = no.trees[opt[,3]], na.action=na.exclude, 
+#                            minbucket=min_size[opt[,2]], mtry=no.features[opt[,1]])
+rf.AD_fin <- randomForest(NY.GDP.PCAP.KD.ZG ~ ., data = data.train, ntree = 100, na.action=na.exclude, 
+                            minbucket=40, mtry=10)
+rf.AD_fin <- randomForest(NY.GDP.PCAP.KD.ZG ~ ., data = data.train, ntree = 100, na.action=na.exclude, 
+                            minbucket=55, mtry=11)
+y_hat <- predict(rf.AD, data.test,type="response")
+data <- data.frame(y_hat, data.test$NY.GDP.PCAP.KD.ZG)
+
+# plot the response prediction
+library(ggplot2)
+plot(y_hat ~ data.test$NY.GDP.PCAP.KD.ZG, ylim=c(-7,10), xlim=c(-20,20))
+p <- ggplot(data=data, aes(y=y_hat, x=data.test$NY.GDP.PCAP.KD.ZG)) + geom_point() + xlim(-20,20) + ylim(-7,10) + xlab("True Y") + ylab("Predicted Y") + theme(text = element_text(size=24))
+p
+ggsave("comparison.png", p, width=10, height=7)
+# print(cor(y_hat, data.test$NY.GDP.PCAP.KD.ZG))
+```
+
+```{r}
+MSE <- read.csv("MSE_matrix_save2.csv")
+MSE <- as.data.frame(t(MSE))
+colnames(MSE) <- MSE[1,]
+MSE <- MSE[-1,]
+library(reshape2)
+library(dplyr)
+library(tidyverse)
+MSE <- rownames_to_column(MSE)
+MSE$trees <- c(rep(50,8), rep(100,8), rep(150,8), rep(200,8), rep(250,8), rep(300,8))
+MSE$min_size <- NA
+MSE[grep("20",MSE$rowname),]$min_size <- 20
+MSE[grep("25",MSE$rowname),]$min_size <- 25
+MSE[grep("30",MSE$rowname),]$min_size <- 30
+MSE[grep("35",MSE$rowname),]$min_size <- 35
+MSE[grep("40",MSE$rowname),]$min_size <- 40
+MSE[grep("45",MSE$rowname),]$min_size <- 45
+MSE[grep("50",MSE$rowname),]$min_size <- 50
+MSE[grep("55",MSE$rowname),]$min_size <- 55
+MSE <- MSE[,-1]
+# Stack them into one column
+MSE_frame <- melt(MSE, id.vars=9:10)
+colnames(MSE_frame) <- c("trees", "bucket_min", "no_features", "MSE")
+
+library(ggplot2)
+require(gridExtra)
+plot1 <- ggplot(data=MSE_frame, aes(x=trees, y=MSE, color=no_features)) + geom_point() + geom_smooth(method = lm, formula = y ~ splines::bs(x, 3), se = FALSE)
+plot2 <- ggplot(data=MSE_frame, aes(x=bucket_min, y=MSE, color=trees)) + geom_point() + geom_smooth(method = lm, formula = y ~ splines::bs(x, 3), se = FALSE)
+plot3 <- ggplot(data=MSE_frame, aes(x=no_features, y=MSE, color=trees)) + geom_point() + geom_smooth(method = lm, formula = y ~ splines::bs(x, 3), se = FALSE)
+grid.arrange(plot1, plot2, plot3, ncol=2, nrow=2)
+
+library(plotly)
+plot_ly(MSE_frame, x = ~trees, y = ~no_features, z = ~MSE, marker = list(color = ~bucket_min, colorscale = c('#FFE1A1', '#683531'), showscale = TRUE)) %>%
+  add_markers() %>%
+  layout(scene = list(xaxis = list(title = 'Number of trees'),
+                     yaxis = list(title = 'Number of features'),
+                     zaxis = list(title = 'MSE')),
+         annotations = list(
+           x = 1.13,
+           y = 1.05,
+           text = 'Minimum number of buckets',
+           xref = 'paper',
+           yref = 'paper',
+           showarrow = FALSE
+         ))
+p <- plot_ly(MSE_frame, x = ~trees, y = ~no_features, z = ~MSE, marker = list(color = ~bucket_min, colorscale = c('#FFE1A1', '#683531'), showscale = TRUE)) %>%
+  add_markers() %>%
+  layout(scene = list(xaxis = list(title = 'Number of trees'),
+                     yaxis = list(title = 'Number of features'),
+                     zaxis = list(title = 'MSE')),
+         annotations = list(
+           x = 1.13,
+           y = 1.05,
+           text = 'Minimum number of buckets',
+           xref = 'paper',
+           yref = 'paper',
+           showarrow = FALSE
+         ))
+htmlwidgets::saveWidget(as_widget(p), "RF_models.html")
+colnames(data) <- c("y_hat", "y_true")
+ind_cl_data <- which(complete.cases(data)==TRUE)
+subdata <- data[ind_cl_data, ]
+cor(subdata[,1], subdata[,2])
+```
+
+```{r}
+splitdata <- read.csv("dataset_withCountry.csv")
+jpeg('plot.jpg')
+boxplot(splitdata$NY.GDP.PCAP.KD.ZG~splitdata$Classification, data=splitdata, notch=FALSE, 
+  col=(c("gold","darkgreen")),varwidth=TRUE, 
+  main="Responses per cluster", xlab="Cluster", ylab="GDP growth per capita", ylim=c(-30, 30))
+dev.off()
+
+```
+
+```{r}
+splitdata <- read.csv("dataset_withCountry.csv")
+train_splitdata <- splitdata[train.ix,4:length(splitdata)]
+test_splitdata <- splitdata[-train.ix,4:length(splitdata)]
+jpeg('plot.jpg')
+boxplot(train_splitdata$NY.GDP.PCAP.KD.ZG~train_splitdata$Classification, data=train_splitdata, notch=FALSE, 
+  col=(c("gold","darkgreen")),varwidth=TRUE, 
+  main="Responses per cluster", xlab="Cluster", ylab="GDP growth per capita", ylim=c(-30, 30))
+dev.off()
+
+```
+
+
+```{r}
+library(dplyr)
+train_cluster1 <- train_splitdata[which(train_splitdata$Classification==1),]
+train_cluster2 <- train_splitdata[which(train_splitdata$Classification==2),]
+train_cluster3 <- train_splitdata[which(train_splitdata$Classification==3),]
+train_cluster4 <- train_splitdata[which(train_splitdata$Classification==4),]
+
+test_cluster1 <- test_splitdata[which(test_splitdata$Classification==1),]
+test_cluster2 <- test_splitdata[which(test_splitdata$Classification==2),]
+test_cluster3 <- test_splitdata[which(test_splitdata$Classification==3),]
+test_cluster4 <- test_splitdata[which(test_splitdata$Classification==4),]
+
+trainX1 <- as.matrix(train_cluster1[,-2]) # Here, I did more lines of code for data preprocessing. This is because of the data format requirement by the package "FactorMineR"
+testX1 <- as.matrix(test_cluster1[,-2])
+trainY1 <- as.matrix(train_cluster1[,2])
+testY1 <- as.matrix(test_cluster1[,2])
+
+trainX2 <- as.matrix(train_cluster2[,-2]) # Here, I did more lines of code for data preprocessing. This is because of the data format requirement by the package "FactorMineR"
+testX2 <- as.matrix(test_cluster2[,-2])
+trainY2 <- as.matrix(train_cluster2[,2])
+testY2 <- as.matrix(test_cluster2[,2])
+
+trainX3 <- as.matrix(train_cluster3[,-2]) # Here, I did more lines of code for data preprocessing. This is because of the data format requirement by the package "FactorMineR"
+testX3 <- as.matrix(test_cluster3[,-2])
+trainY3 <- as.matrix(train_cluster3[,2])
+testY3 <- as.matrix(test_cluster3[,2])
+
+trainX4 <- as.matrix(train_cluster4[,-2]) # Here, I did more lines of code for data preprocessing. This is because of the data format requirement by the package "FactorMineR"
+testX4 <- as.matrix(test_cluster4[,-2])
+trainY4 <- as.matrix(train_cluster4[,2])
+testY4 <- as.matrix(test_cluster4[,2])
+
+library(FactoMineR)
+PCA1 <- PCA(trainX1, graph = FALSE,ncp=10)
+PCA2 <- PCA(trainX2, graph = FALSE,ncp=10)
+PCA3 <- PCA(trainX3, graph = FALSE,ncp=10)
+PCA4 <- PCA(trainX4, graph = FALSE,ncp=10)
+
+library(factoextra)
+require(gridExtra)
+plot1 <- fviz_screeplot(PCA1, addlabels = TRUE, ylim = c(0, 50), ylab="Explained var", main="Cluster 1")
+plot2 <- fviz_screeplot(PCA2, addlabels = TRUE, ylim = c(0, 55), ylab="Explained var", main="Cluster 2")
+plot3 <- fviz_screeplot(PCA3, addlabels = TRUE, ylim = c(0, 70), ylab="Explained var", main="Cluster 3")
+plot4 <- fviz_screeplot(PCA4, addlabels = TRUE, ylim = c(0, 80), ylab="Explained var", main="Cluster 4")
+jpeg('scree_plots.jpg')
+f <- grid.arrange(plot1, plot2, plot3, plot4, ncol=2, nrow=2)
+dev.off()
+```
+
+```{r}
+trainX1 <- PCA1$ind$coord # Do transformation of the X matrix of training data
+trainX1 <- data.frame(trainX1)
+names(trainX1) <- c("PC1","PC2","PC3","PC4","PC5","PC6","PC7","PC8","PC9","PC10")
+testX1 <- predict(PCA1, newdata = testX1) # Do transformation of the X matrix of testing data
+testX1 <- data.frame(testX1$coord)
+names(testX1) <- c("PC1","PC2","PC3","PC4","PC5","PC6","PC7","PC8","PC9","PC10")
+
+tempData1 <- data.frame(trainY1,trainX1)
+names(tempData1)[1] <- c("GDP")
+lm.PCA1 <- lm(GDP ~ ., data = tempData1)
+summary(lm.PCA1)
+
+y_hat1 <- predict(lm.PCA1, testX1) 
+cor(y_hat1, testY1) #For regression model, you can use correlation to measure how close your predictions with the true outcome values of the data points 
+mse1 <- mean((y_hat1 - testY1)^2) # Another metric is the mean squared error (mse)
+mse1
+
+trainX2 <- PCA2$ind$coord # Do transformation of the X matrix of training data
+trainX2 <- data.frame(trainX2)
+names(trainX2) <- c("PC1","PC2","PC3","PC4","PC5","PC6","PC7","PC8","PC9","PC10")
+testX2 <- predict(PCA2 , newdata = testX2) # Do transformation of the X matrix of testing data
+testX2 <- data.frame(testX2$coord)
+names(testX2) <- c("PC1","PC2","PC3","PC4","PC5","PC6","PC7","PC8","PC9","PC10")
+
+tempData2 <- data.frame(trainY2,trainX2)
+names(tempData2)[1] <- c("GDP")
+lm.PCA2 <- lm(GDP ~ ., data = tempData2)
+summary(lm.PCA2)
+
+y_hat2 <- predict(lm.PCA2, testX2) 
+cor(y_hat2, testY2) #For regression model, you can use correlation to measure how close your predictions with the true outcome values of the data points 
+mse2 <- mean((y_hat2 - testY2)^2) # Another metric is the mean squared error (mse)
+mse2
+
+trainX3 <- PCA3$ind$coord # Do transformation of the X matrix of training data
+trainX3 <- data.frame(trainX3)
+names(trainX3) <- c("PC1","PC2","PC3","PC4","PC5","PC6","PC7","PC8","PC9","PC10")
+testX3 <- predict(PCA3 , newdata = testX3) # Do transformation of the X matrix of testing data
+testX3 <- data.frame(testX3$coord)
+names(testX3) <- c("PC1","PC2","PC3","PC4","PC5","PC6","PC7","PC8","PC9","PC10")
+
+tempData3 <- data.frame(trainY3,trainX3)
+names(tempData3)[1] <- c("GDP")
+lm.PCA3 <- lm(GDP ~ ., data = tempData3)
+summary(lm.PCA3)
+
+y_hat3 <- predict(lm.PCA3, testX3) 
+cor(y_hat3, testY3) #For regression model, you can use correlation to measure how close your predictions with the true outcome values of the data points 
+mse3 <- mean((y_hat3 - testY3)^2) # Another metric is the mean squared error (mse)
+mse3
+
+trainX4 <- PCA4$ind$coord # Do transformation of the X matrix of training data
+trainX4 <- data.frame(trainX4)
+names(trainX4) <- c("PC1","PC2","PC3","PC4","PC5","PC6","PC7","PC8","PC9","PC10")
+testX4 <- predict(PCA4 , newdata = testX4) # Do transformation of the X matrix of testing data
+testX4 <- data.frame(testX4$coord)
+names(testX4) <- c("PC1","PC2","PC3","PC4","PC5","PC6","PC7","PC8","PC9","PC10")
+
+tempData4 <- data.frame(trainY4,trainX4)
+names(tempData4)[1] <- c("GDP")
+lm.PCA4 <- lm(GDP ~ ., data = tempData4)
+summary(lm.PCA4)
+
+y_hat4 <- predict(lm.PCA4, testX4) 
+cor(y_hat4, testY4) #For regression model, you can use correlation to measure how close your predictions with the true outcome values of the data points 
+mse4 <- mean((y_hat4 - testY4)^2) # Another metric is the mean squared error (mse)
+mse4
+```
+
+
+
